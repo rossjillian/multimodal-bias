@@ -2,6 +2,9 @@ import json
 import argparse
 import random
 from tqdm import tqdm
+import os
+import shutil
+import re
 
 
 def extract_annotations(annotation_file):
@@ -63,29 +66,47 @@ def save_image_text(category_dict, caption_dict, write_name):
     json_dict = {}
     for k, v in category_dict.items():
         for id in v:
-            json_dict[id] = [k, caption_dict[id]]
+            json_dict[str(id).zfill(12)] = [k, caption_dict[id]]
 
     with open(write_name, 'w') as f:
         json.dump(json_dict, f)
     return json_dict
 
 
+def create_coco_s(args, categories):
+    labeled_dict = analyze_json(args.instances)
+    # Returns dictionary of categories as keys and list of image ids as values
+    category_dict = extract_categories(3000, categories, labeled_dict)
+    # Returns dictionary of image ids and captions
+    caption_dict = extract_annotations(args.captions)
+    # Saves JSON file of image id as key and list of [ category, [ captions ] ]
+    save_image_text(category_dict, caption_dict, args.write_json)
+
+
+def parse_image_dir(image_dir, image_json, new_dir):
+    with open(image_json) as f:
+        image_dict = json.load(f)
+
+    for file in tqdm(os.listdir(image_dir)):
+        match = re.search('COCO_train2014_(\d+).jpg', file)
+        image_num = match.group(1)
+        if image_num in image_dict.keys():
+            shutil.move(os.path.join(image_dir, file), new_dir, file)
+
+    return 1
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--instances', type=str, help="File path to instances JSON")
-    parser.add_argument('--annotations', type=str, help="File path to annotation JSON")
-    parser.add_argument('--write_json', type=str, help="Name of JSON file to write extracted data")
+    parser.add_argument('--instances', type=str, default='data/annotations/instances_train2014.json', help="File path to instances JSON")
+    parser.add_argument('--captions', type=str, default='data/annotations/captions_train2014.json', help="File path to annotation JSON")
+    parser.add_argument('--write_json', type=str, default='coco-10s.json', help="Name of JSON file to write extracted data")
+    parser.add_argument('--image_dir', type=str, default='data/train2014', help="Directory of images")
     return parser.parse_args()
 
 
 if __name__ == '__main__':
     args = parse_args()
     categories = ['bicycle', 'traffic light', 'sheep', 'tie', 'carrot', 'sink', 'book', 'remote', 'spoon', 'skis']
-    labeled_dict = analyze_json(args.instances)
-    # Returns dictionary of categories as keys and list of image ids as values
-    category_dict = extract_categories(3000, categories, labeled_dict)
-    # Returns dictionary of image ids and captions
-    caption_dict = extract_annotations(args.annotations)
-    # Saves JSON file of image id as key and list of [ category, [ captions ] ]
-    save_image_text(category_dict, caption_dict, args.write_json)
+    parse_image_dir(args.image_dir, os.path.join('data', args.write_json), 'data/coco-10s-train')
 
