@@ -13,12 +13,12 @@ The default directory set-up is assumed:
 
 			/train2014
 
-		datasets.py
+		create_dataset.py
 
 
 `train2014` should contain the COCO 2014 train images, available for download here: http://images.cocodataset.org/zips/train2014.zip.
 
-To create the COCO-10S dataset, run `python3 -m datasets`.
+To create the COCO-10S dataset, run `python3 -m create_dataset`.
 
 This will produce:
 
@@ -39,6 +39,6 @@ This will produce:
 
 			coco-10s-captions.json
 
-		datasets.py
+		create_dataset.py
 
 
