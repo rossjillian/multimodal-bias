@@ -5,6 +5,7 @@ from tqdm import tqdm
 import os
 import shutil
 import re
+from PIL import Image
 
 
 def extract_annotations(annotation_file):
@@ -38,7 +39,7 @@ def extract_categories(num_per_class, categories, mapped_categories):
 def analyze_json(json_file):
     """
     :param json_file: JSON of annotations and categories
-    :return: returns count of each category in the JSON
+    :return: returns directory with keys as the category name and value of a list of image IDs
     """
     labeled_category_dict = {}
     category_dict = {}
@@ -73,17 +74,11 @@ def save_image_text(category_dict, caption_dict, write_name):
     return json_dict
 
 
-def create_coco_s(args, categories):
-    labeled_dict = analyze_json(args.instances)
-    # Returns dictionary of categories as keys and list of image ids as values
-    category_dict = extract_categories(3000, categories, labeled_dict)
-    # Returns dictionary of image ids and captions
-    caption_dict = extract_annotations(args.captions)
-    # Saves JSON file of image id as key and list of [ category, [ captions ] ]
-    save_image_text(category_dict, caption_dict, args.write_json)
-
-
 def parse_image_dir(image_dir, image_json, new_dir):
+    """
+    Copies images from original COCO directory image_dir to new_dir with COCO-10S images
+    :return: 1 on success
+    """
     with open(image_json) as f:
         image_dict = json.load(f)
 
@@ -91,22 +86,101 @@ def parse_image_dir(image_dir, image_json, new_dir):
         match = re.search('COCO_train2014_(\d+).jpg', file)
         image_num = match.group(1)
         if image_num in image_dict.keys():
-            shutil.move(os.path.join(image_dir, file), new_dir, file)
-
+            shutil.copy(os.path.join(image_dir, file), os.path.join(new_dir, file))
     return 1
+
+
+def process_coco_s(json_file):
+    """
+    Processes COCO-10S JSON - extra helper for after-the-fact modifications
+    :param json_file: file path to COCO-10S JSON
+    :return: category dictionary
+    """
+    category_dict = {}
+    with open(json_file) as f:
+        image_id_dict = json.load(f)
+
+    for k, v in image_id_dict.items():
+        if v[0] not in category_dict.keys():
+            category_dict[v[0]] = [k]
+        else:
+            category_dict[v[0]].append(k)
+    return category_dict
+
+
+def color_split(categories, category_dict):
+    """
+    Randomly choose 1/2 of categories to be 95% BW and 5% C; the other half will be 5% BW and 95% C
+    """
+    split_dict = {}
+    # Leaving same seed for reproducability
+    seed = 4
+    random.Random(seed).shuffle(categories)
+    # Assign grayscale and color split
+    i = 0
+    for k, v in tqdm(category_dict.items()):
+        # We expect total to be 3000 for each category
+        total = len(v)
+        # 95% and 5% split
+        split = int(total * 0.05)
+        # Shuffle image IDs in category
+        random.Random(seed).shuffle(v)
+        # 95% BW, 5% C
+        if i % 2 != 0:
+            split = total - split
+
+        for j in range(split):
+            name = 'data/coco-10s-train/COCO_train2014_' + v[j] + '.jpg'
+            original = Image.open(name)
+            grey = original.convert('L')
+            # Save to same name
+            grey.save(name)
+            split_dict[name] = 'grey'
+        i += 1
+
+    with open('data/coco-10s-grey.json', 'w') as f:
+        json.dump(split_dict, f)
+
+    return split_dict
+
+
+def create_coco_s(args, categories):
+    """
+    Creates data/coco-10s-train directory
+    """
+    if not os.path.isdir(args.new_image_dir):
+        os.mkdir(args.new_image_dir)
+
+    # Returns directory with keys as the category name and value of a list of image IDs
+    labeled_dict = analyze_json(args.instances)
+    # Picks 3000 random image IDs in each category
+    category_dict = extract_categories(3000, categories, labeled_dict)
+    # Returns dictionary of image ids and captions
+    caption_dict = extract_annotations(args.captions)
+    # Saves JSON file of image id as key and list of [ category, [ captions ] ]
+    save_image_text(category_dict, caption_dict, args.write_json)
+    # Uses saved JSON to copy correct COCO files
+    parse_image_dir(args.image_dir, os.path.join('data', args.write_json), 'data/coco-10s-train')
+    # Do BW/C split
+    color_split(categories, category_dict)
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--instances', type=str, default='data/annotations/instances_train2014.json', help="File path to instances JSON")
-    parser.add_argument('--captions', type=str, default='data/annotations/captions_train2014.json', help="File path to annotation JSON")
-    parser.add_argument('--write_json', type=str, default='coco-10s.json', help="Name of JSON file to write extracted data")
-    parser.add_argument('--image_dir', type=str, default='data/train2014', help="Directory of images")
+    # Original COCO data args
+    parser.add_argument('--instances', type=str, default='data/annotations/instances_train2014.json',
+                        help="File path to original COCO instances JSON")
+    parser.add_argument('--captions', type=str, default='data/annotations/captions_train2014.json',
+                        help="File path to original COCO instances annotation JSON")
+    parser.add_argument('--image_dir', type=str, default='data/train2014', help="Directory of COCO images")
+    # COCO-10S data args
+    parser.add_argument('--write_json', type=str, default='data/coco-10s.json',
+                        help="Name of JSON file to write extracted COCO-10S data")
+    parser.add_argument('--new_image_dir', type=str, default='data/coco-10s-train', help='Directory for COCO-10S data')
     return parser.parse_args()
 
 
 if __name__ == '__main__':
     args = parse_args()
     categories = ['bicycle', 'traffic light', 'sheep', 'tie', 'carrot', 'sink', 'book', 'remote', 'spoon', 'skis']
-    parse_image_dir(args.image_dir, os.path.join('data', args.write_json), 'data/coco-10s-train')
-
+    create_coco_s(args, categories)
