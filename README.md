@@ -1,4 +1,7 @@
-# More Signals, More Problems? Examining How Multimodal Learning Affects Bias
+# More Sources, More Problems? Examining How Multimodal Learning Affects Bias
+
+An examination of how multimodal learning affects model bias. This work is a multimodal extension of work done by Wang et. al on fairness in visual recognition (https://arxiv.org/abs/1911.11834). It is an independent research project, which started as a final project for COMS 4995, Deep Learning for Computer Vision.
+
 
 ## Creating COCO-10S
 
@@ -35,16 +38,24 @@ This will produce:
 
 			/train2014
 
-			/val2014
-
 			/coco-10s-train
 
-			coco-10s.json
+			/val2014
+
+			/val2014-grey
 
 			coco-10s-grey.json
 
 			coco-10s-captions.json
 
+			coco-10s-test.json
+
+			coco-10s-train.json
+
 		create_dataset.py
+
+## Running Baselines
+
+
 
 

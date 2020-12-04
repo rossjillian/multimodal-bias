@@ -4,6 +4,7 @@ from dataset import COCO10SDataset
 from torchvision import transforms, models, utils
 import argparse
 from models import COCO10Classifier
+import statistics
 
 
 def main(args):
@@ -40,14 +41,16 @@ def main(args):
     model.fc = COCO10Classifier()
 
     criterion = nn.CrossEntropyLLoss()
-    optimizer = optim.Adam(model.fc.parameters(), lr=0.003)
+    optimizer = optim.Adam(model.parameters(), lr=0.003)
     model.to(device)
 
     running_loss = 0
+    best_accuracy = 0
 
     i = 0
     # Train/test loop
     for epoch in range(args.epochs):
+        cur_accuracy = []
         for inputs, labels in train_loader:
             i += 1
             inputs, labels = inputs.to(device), labels.to(device)
@@ -73,10 +76,21 @@ def main(args):
                         predicted = torch.argmax(output, dim=1)
                         correct += (predicted == labels).sum()
                         total += labels.size(0)
-                        print('Accuracy: %f' % (correct / total))
+                        accuracy = correct / total
+                        print('Accuracy: %f' % accuracy)
+                        cur_accuracy.append(accuracy)
 
                 running_loss = 0
                 model.train()
+
+        if statistics.mean(cur_accuracy) > best_accuracy:
+            # Save model weights
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict()
+            }, 'resnet_best.pt')
+            best_accuracy = statistics.mean(cur_accuracy)
 
 
 def parse_args():
