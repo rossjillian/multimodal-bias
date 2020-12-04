@@ -253,7 +253,7 @@ def parse_args():
                         help="File path to original COCO instances annotation JSON")
     parser.add_argument('--image_dir', type=str, default='data/train2014', help="Directory of COCO images")
     # COCO-10S data args
-    parser.add_argument('--write_json', type=str, default='data/coco-10s.json',
+    parser.add_argument('--write_json', type=str, default='data/coco-10s-train.json',
                         help="Name of JSON file to write extracted COCO-10S data")
     parser.add_argument('--new_image_dir', type=str, default='data/coco-10s-train', help='Directory for COCO-10S data')
     return parser.parse_args()
