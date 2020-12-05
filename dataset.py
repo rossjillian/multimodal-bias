@@ -21,12 +21,12 @@ class COCO10SDataset(Dataset):
 
     def __getitem__(self, idx):
         # Gets picture
-        img_path = os.path.join(self.img_dir, 'COCO_' + self.set_type + '2014_' + str(idx) + '.jpg')
+        img_path = os.path.join(self.img_dir, 'COCO_' + self.set_type + '2014_' + list(self.json_dict.keys())[idx] + '.jpg')
         img = Image.open(img_path)
         if self.transforms is not None:
             img = self.transforms(img)
 
         # Gets category label
-        label = self.json_dict[idx][0]
+        label = self.json_dict[(list(self.json_dict.keys)[idx])][0]
         # Convert to numerical
         return img, label

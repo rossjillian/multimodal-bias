@@ -1,7 +1,7 @@
 import torch
-from torch import nn, optim
+from torch import nn, optim, utils
 from dataset import COCO10SDataset
-from torchvision import transforms, models, utils
+from torchvision import transforms, models
 import argparse
 from models import COCO10Classifier
 import statistics
@@ -40,7 +40,7 @@ def main(args):
     # 10 way classification
     model.fc = COCO10Classifier()
 
-    criterion = nn.CrossEntropyLLoss()
+    criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.003)
     model.to(device)
 

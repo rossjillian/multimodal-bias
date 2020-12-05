@@ -70,11 +70,12 @@ def combine_captions_category(category_dict, caption_dict):
     return filtered_dict
 
 
-def pick_random_from_categories(num_per_category, categories, mapped_categories):
+def pick_random_from_categories(categories, mapped_categories, num_per_category=None):
     seed = 4
     filtered_dict = {key: mapped_categories[key] for key in categories}
-    for k, v in filtered_dict.items():
-        filtered_dict[k] = random.Random(seed).sample(v, num_per_category)
+    if num_per_category:
+        for k, v in filtered_dict.items():
+            filtered_dict[k] = random.Random(seed).sample(v, num_per_category)
     return filtered_dict
 
 
@@ -100,7 +101,7 @@ def parse_image_dir(image_dir, image_dict, new_dir):
     :return: 1 on success
     """
     for file in tqdm(os.listdir(image_dir)):
-        match = re.search('COCO_train2014_(\d+).jpg', file)
+        match = re.search('COCO_val2014_(\d+).jpg', file)
         image_num = match.group(1)
         if image_num in image_dict.keys():
             shutil.copy(os.path.join(image_dir, file), os.path.join(new_dir, file))
@@ -237,8 +238,11 @@ def create_coco_s(args, categories):
     Creates data/coco-10s-train directory
     """
     # Set-up directory structure
-    if not os.path.isdir(args.new_image_dir):
-        os.mkdir(args.new_image_dir)
+    if not os.path.isdir(args.new_train_dir):
+        os.mkdir(args.new_train_dir)
+
+    if not os.path.isdir(args.new_test_dir):
+        os.mkdir(args.new_test_dir)
 
     # TRAIN DATA
 
@@ -249,16 +253,15 @@ def create_coco_s(args, categories):
     # Returns dictionary with keys as category name and value of a list of image IDs with "valid" captions
     valid_images_per_category = combine_captions_category(category_image_dict, image_caption_dict)
     # Randomly choose 1500
-    valid_images_per_category = pick_random_from_categories(1500, categories, valid_images_per_category)
+    valid_images_per_category = pick_random_from_categories(categories, valid_images_per_category, num_per_category=1500)
     # Saves JSON file of image id as key and list of [ category, [ captions ] ]
     valid_image_captions_category = save_image_text(valid_images_per_category, image_caption_dict, args.write_json_train)
     # Uses saved JSON to copy correct COCO files
-    parse_image_dir(args.train_dir, valid_image_captions_category, args.new_image_dir)
+    parse_image_dir(args.train_dir, valid_image_captions_category, args.new_train_dir)
     # Do greyscale and color split
     color_split(categories, valid_images_per_category)
     # Do name-A and name-B language split
     lang_split(categories, valid_images_per_category, valid_image_captions_category)
-
     # TEST DATA
 
     # Returns dictionary with keys as the category name and value of a list of image IDs
@@ -267,11 +270,14 @@ def create_coco_s(args, categories):
     image_caption_dict = extract_captions(args.test_captions)
     # Returns dictionary with keys as category name and value of a list of image IDs with "valid" captions
     valid_images_per_category = combine_captions_category(category_image_dict, image_caption_dict)
+    valid_images_per_category = pick_random_from_categories(categories, valid_images_per_category)
     # Saves JSON file of image id as key and list of [ category, [ captions ] ]
-    save_image_text(valid_images_per_category, image_caption_dict, args.write_json_test)
+    valid_image_captions_category = save_image_text(valid_images_per_category, image_caption_dict, args.write_json_test)
+    # Uses saved JSON to copy correct COCO files
+    parse_image_dir(args.val_dir, valid_image_captions_category, args.new_test_dir)
 
     # Create greyscale validation set
-    make_greyscale(args.val_dir)
+    # make_greyscale(args.val_dir)
 
     # TODO: create name-A and name-B validation sets
 
@@ -292,10 +298,11 @@ def parse_args():
     # COCO-10S train data args
     parser.add_argument('--write_json_train', type=str, default='data/coco-10s-train.json',
                         help="Name of JSON file to write extracted COCO-10S data")
-    parser.add_argument('--new_image_dir', type=str, default='data/coco-10s-train', help='Directory for COCO-10S data')
+    parser.add_argument('--new_train_dir', type=str, default='data/coco-10s-train', help='Directory for COCO-10S data')
     # COCO-10S test data args
     parser.add_argument('--write_json_test', type=str, default='data/coco-10s-test.json',
                         help="Name of JSON file to write extracted COCO-10S data")
+    parser.add_argument('--new_test_dir', type=str, default='data/coco-10s-test', help='Directory for COCO-10S data')
     return parser.parse_args()
 
 
