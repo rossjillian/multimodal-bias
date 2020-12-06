@@ -13,21 +13,21 @@ def main(args):
                                         set_type='train',
                                         img_dir='data/coco-10s-train/',
                                         transforms=transforms.Compose([
-                                                   transforms.Resize(256),
+                                                   transforms.Resize((256, 256)),
                                                    transforms.ToTensor()]))
     if args.test_grey:
         test_dataset = COCO10SDataset(json_file='data/coco-10s-test.json',
                                       set_type='val',
                                       img_dir='data/val2014-grey/',
                                       transforms=transforms.Compose([
-                                          transforms.Resize(256),
+                                          transforms.Resize((256, 256)),
                                           transforms.ToTensor()]))
     else:
         test_dataset = COCO10SDataset(json_file='data/coco-10s-test.json',
                                        set_type='val',
                                        img_dir='data/val2014/',
                                        transforms=transforms.Compose([
-                                           transforms.Resize(256),
+                                           transforms.Resize((256, 256)),
                                            transforms.ToTensor()]))
 
     train_loader = utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)

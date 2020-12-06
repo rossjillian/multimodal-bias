@@ -9,6 +9,6 @@ class COCO10Classifier(nn.Sequential):
         self.dense = nn.Linear(512, 10)
 
     def forward(self, x):
-        x = torch.Softmax(self.dense(x))
+        x = self.dense(x)
         return x
 

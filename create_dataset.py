@@ -277,7 +277,7 @@ def create_coco_s(args, categories):
     parse_image_dir(args.val_dir, valid_image_captions_category, args.new_test_dir)
 
     # Create greyscale validation set
-    # make_greyscale(args.val_dir)
+    make_greyscale(args.val_dir)
 
     # TODO: create name-A and name-B validation sets
 

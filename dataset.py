@@ -15,6 +15,8 @@ class COCO10SDataset(Dataset):
             self.json_dict = json.load(f)
         self.transforms = transforms
         self.set_type = set_type
+        self.categories = {'train': 0, 'bench': 1, 'dog': 2, 'umbrella': 3, 'skateboard': 4,
+                           'pizza': 5, 'chair': 6, 'laptop': 7, 'sink': 8, 'clock': 9}
 
     def __len__(self):
         return len(self.json_dict)
@@ -22,11 +24,10 @@ class COCO10SDataset(Dataset):
     def __getitem__(self, idx):
         # Gets picture
         img_path = os.path.join(self.img_dir, 'COCO_' + self.set_type + '2014_' + list(self.json_dict.keys())[idx] + '.jpg')
-        img = Image.open(img_path)
+        img = Image.open(img_path).convert('RGB')
         if self.transforms is not None:
             img = self.transforms(img)
 
         # Gets category label
-        label = self.json_dict[(list(self.json_dict.keys)[idx])][0]
-        # Convert to numerical
+        label = self.categories[self.json_dict[(list(self.json_dict.keys)[idx])][0]]
         return img, label
