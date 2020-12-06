@@ -29,5 +29,5 @@ class COCO10SDataset(Dataset):
             img = self.transforms(img)
 
         # Gets category label
-        label = self.categories[self.json_dict[(list(self.json_dict.keys)[idx])][0]]
+        label = self.categories[self.json_dict[(list(self.json_dict.keys())[idx])][0]]
         return img, label

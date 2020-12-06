@@ -1,10 +1,12 @@
 import torch
 from torch import nn, optim, utils
+from torch.utils.tensorboard import SummaryWriter
 from dataset import COCO10SDataset
 from torchvision import transforms, models
 import argparse
 from models import COCO10Classifier
 import statistics
+from tqdm import tqdm
 
 
 def main(args):
@@ -18,14 +20,14 @@ def main(args):
     if args.test_grey:
         test_dataset = COCO10SDataset(json_file='data/coco-10s-test.json',
                                       set_type='val',
-                                      img_dir='data/val2014-grey/',
+                                      img_dir='data/coco-10s-test-grey/',
                                       transforms=transforms.Compose([
                                           transforms.Resize((256, 256)),
                                           transforms.ToTensor()]))
     else:
         test_dataset = COCO10SDataset(json_file='data/coco-10s-test.json',
                                        set_type='val',
-                                       img_dir='data/val2014/',
+                                       img_dir='data/coco-10s-test/',
                                        transforms=transforms.Compose([
                                            transforms.Resize((256, 256)),
                                            transforms.ToTensor()]))
@@ -41,56 +43,81 @@ def main(args):
     model.fc = COCO10Classifier()
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.003)
+    optimizer = optim.Adam(model.parameters(), lr=0.01)
     model.to(device)
 
-    running_loss = 0
     best_accuracy = 0
 
-    i = 0
+    # Initialize Tensorboard
+    writer = SummaryWriter()
+
     # Train/test loop
     for epoch in range(args.epochs):
-        cur_accuracy = []
-        for inputs, labels in train_loader:
-            i += 1
-            inputs, labels = inputs.to(device), labels.to(device)
-            optimizer.zero_grad()
-            output = model.forward(inputs)
-            loss = criterion(output, labels)
-            loss.backward()
-            optimizer.step()
-            running_loss += loss.item()
+        model.train()
+        print("Train")
+        train_acc = []
+        with tqdm(train_loader, unit='batch') as tepoch:
+            for inputs, labels in tepoch:
+                tepoch.set_description(f"Epoch {epoch}")
+                
+                inputs, labels = inputs.to(device), labels.to(device)
+                optimizer.zero_grad()
+                output = model.forward(inputs)
+                loss = criterion(output, labels)
 
-            if i % 10 == 0:
-                test_loss = 0
-                correct = 0
-                total = 0
+                loss.backward()
+                optimizer.step()
+
+                # Calculate per batch accuracy
+                predicted = torch.argmax(output, dim=1)
+                correct = (labels == predicted).float().sum().item()
+                total = args.batch_size
+                accuracy = correct / total
+                train_acc.append(accuracy)
+
+                tepoch.set_postfix(loss = loss.item(), accuracy = accuracy)
+                
+        print("Average train accuracy")
+        print(statistics.mean(train_acc))
+        
+        writer.add_scalar("Accuracy/train", statistics.mean(train_acc), epoch)
+
+        print("Test")
+        test_acc = []
+        with tqdm(test_loader, unit='batch') as tepoch:
+            for inputs, labels in tepoch:
                 model.eval()
                 with torch.no_grad():
-                    for inputs, labels in test_loader:
-                        inputs, labels = inputs.to(device), labels.to(device)
-                        output = model.forward(inputs)
-                        batch_loss = criterion(output, labels)
-                        test_loss += batch_loss.item()
+                    tepoch.set_description(f"Epoch {epoch}")
+                        
+                    inputs, labels = inputs.to(device), labels.to(device)
+                    output = model.forward(inputs)
+                    loss = criterion(output, labels)
 
-                        predicted = torch.argmax(output, dim=1)
-                        correct += (predicted == labels).sum()
-                        total += labels.size(0)
-                        accuracy = correct / total
-                        print('Accuracy: %f' % accuracy)
-                        cur_accuracy.append(accuracy)
+                    # Calculate per batch accuracy
+                    predicted = torch.argmax(output, dim=1)
+                    correct = (labels == predicted).float().sum().item()
+                    total = args.batch_size
+                    accuracy = correct / total
+                    test_acc.append(accuracy)
 
-                running_loss = 0
+                    tepoch.set_postfix(loss = loss.item(), accuracy = accuracy)
+
                 model.train()
+        
+        print("Average test accuracy")
+        print(statistics.mean(test_acc))
 
-        if statistics.mean(cur_accuracy) > best_accuracy:
+        writer.add_scalar("Accuracy/test", statistics.mean(test_acc), epoch)
+
+        if statistics.mean(test_acc) > best_accuracy:
             # Save model weights
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict()
             }, 'resnet_best.pt')
-            best_accuracy = statistics.mean(cur_accuracy)
+            best_accuracy = statistics.mean(test_acc)
 
 
 def parse_args():
