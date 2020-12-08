@@ -13,6 +13,14 @@ The default directory set-up is assumed:
 		/data
 
 			/annotations
+	
+				instances_train2014.json
+
+				instances_val2014.json
+
+				captions_train2014.json
+
+				captions_val2014.json
 
 			/train2014
 

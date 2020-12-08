@@ -4,7 +4,28 @@ import os
 from PIL import Image
 
 
-class COCO10SDataset(Dataset):
+"""
+Lang and Vision Dataset classes written separately for lighter weight 
+while training baselines separately.
+"""
+
+
+class COCO10SDatasetLang(Dataset):
+    def __init__(self, caption_file):
+        """
+        :param caption_file: Path to JSON file with caption and category
+        """
+        with open(json_file, 'r') as f:
+            self.json_dict = json.load(f)
+
+    def __len__(self):
+        return len(self.json_dict)
+
+    def __getitem__(self, idx):
+        return
+
+
+class COCO10SDatasetVision(Dataset):
     def __init__(self, img_dir, set_type, json_file, transforms=None):
         """
         :param img_dir: Directory with COCO-10S images (coco-10s-train)

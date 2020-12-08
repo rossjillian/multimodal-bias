@@ -262,6 +262,7 @@ def create_coco_s(args, categories):
     color_split(categories, valid_images_per_category)
     # Do name-A and name-B language split
     lang_split(categories, valid_images_per_category, valid_image_captions_category)
+
     # TEST DATA
 
     # Returns dictionary with keys as the category name and value of a list of image IDs

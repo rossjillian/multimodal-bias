@@ -1,7 +1,7 @@
 import torch
 from torch import nn, optim, utils
 from torch.utils.tensorboard import SummaryWriter
-from dataset import COCO10SDataset
+from dataset import COCO10SDatasetVision, COCO10SDatasetLang
 from torchvision import transforms, models
 import argparse
 from models import COCO10Classifier
@@ -11,26 +11,33 @@ from tqdm import tqdm
 
 def main(args):
     # Initialize dataset and loaders
-    train_dataset = COCO10SDataset(json_file='data/coco-10s-train.json',
-                                        set_type='train',
-                                        img_dir='data/coco-10s-train/',
-                                        transforms=transforms.Compose([
-                                                   transforms.Resize((256, 256)),
-                                                   transforms.ToTensor()]))
-    if args.test_grey:
-        test_dataset = COCO10SDataset(json_file='data/coco-10s-test.json',
+
+    # Train dataset
+    if args.modality == 'vision':
+        train_dataset = COCO10SDatasetVision(json_file='data/coco-10s-train.json',
+                set_type='train', img_dir='data/coco-10s-train/',
+                transforms=transforms.Compose([transforms.Resize((256, 256)), transforms.ToTensor()]))
+    elif args.modality == 'lang':
+        train_dataset = COCO10SDatasetLang()
+
+    # Test dataset
+    if args.test_grey and args.modality == 'vision':
+        test_dataset = COCO10SDatasetVision(json_file='data/coco-10s-test.json',
                                       set_type='val',
                                       img_dir='data/coco-10s-test-grey/',
                                       transforms=transforms.Compose([
                                           transforms.Resize((256, 256)),
                                           transforms.ToTensor()]))
-    else:
-        test_dataset = COCO10SDataset(json_file='data/coco-10s-test.json',
+    elif args.modality == 'vision':
+        test_dataset = COCO10SDatasetVision(json_file='data/coco-10s-test.json',
                                        set_type='val',
                                        img_dir='data/coco-10s-test/',
                                        transforms=transforms.Compose([
                                            transforms.Resize((256, 256)),
                                            transforms.ToTensor()]))
+    elif args.modality == 'lang':
+        test_dataset = COCO10SDatasetLang()
+
 
     train_loader = utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     test_loader = utils.data.DataLoader(test_dataset, batch_size=args.batch_size)
@@ -56,6 +63,7 @@ def main(args):
         model.train()
         print("Train")
         train_acc = []
+        train_loss = []
         with tqdm(train_loader, unit='batch') as tepoch:
             for inputs, labels in tepoch:
                 tepoch.set_description(f"Epoch {epoch}")
@@ -64,6 +72,8 @@ def main(args):
                 optimizer.zero_grad()
                 output = model.forward(inputs)
                 loss = criterion(output, labels)
+
+                train_loss.append(loss.item())
 
                 loss.backward()
                 optimizer.step()
@@ -81,9 +91,11 @@ def main(args):
         print(statistics.mean(train_acc))
         
         writer.add_scalar("Accuracy/train", statistics.mean(train_acc), epoch)
+        writer.add_scalar("Loss/train", statistics.mean(train_loss), epoch)
 
         print("Test")
         test_acc = []
+        test_loss = []
         with tqdm(test_loader, unit='batch') as tepoch:
             for inputs, labels in tepoch:
                 model.eval()
@@ -93,6 +105,8 @@ def main(args):
                     inputs, labels = inputs.to(device), labels.to(device)
                     output = model.forward(inputs)
                     loss = criterion(output, labels)
+
+                    test_loss.append(loss.item())
 
                     # Calculate per batch accuracy
                     predicted = torch.argmax(output, dim=1)
@@ -109,6 +123,7 @@ def main(args):
         print(statistics.mean(test_acc))
 
         writer.add_scalar("Accuracy/test", statistics.mean(test_acc), epoch)
+        writer.add_scalar("Loss/test", statistics.mean(test_loss), epoch)
 
         if statistics.mean(test_acc) > best_accuracy:
             # Save model weights
@@ -125,6 +140,7 @@ def parse_args():
     parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--test_grey', type=int, default=0)
+    parser.add_argument('--modality', type=str, default='vision', help='vision, lang')
     return parser.parse_args()
 
 
