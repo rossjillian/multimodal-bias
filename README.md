@@ -47,20 +47,27 @@ This will produce:
 			/train2014
 
 			/coco-10s-train
-
+			
 			/val2014
+
+			/coco-10s-test
 
 			/val2014-grey
 
 			coco-10s-grey.json
 
-			coco-10s-captions.json
-
 			coco-10s-test.json
+
+			coco-10s-test-A.json
+
+			coco-10s-test-B.json
 
 			coco-10s-train.json
 
 		create_dataset.py
+
+
+`coco-10s-grey` contains the image IDs of the greyscale images in the `/coco-10s-train`.
 
 ## Running Baselines
 

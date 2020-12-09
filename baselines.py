@@ -1,7 +1,7 @@
 import torch
 from torch import nn, optim, utils
 from torch.utils.tensorboard import SummaryWriter
-from dataset import COCO10SDatasetVision, COCO10SDatasetLang
+from dataset import COCO10SDataset
 from torchvision import transforms, models
 import argparse
 from models import COCO10Classifier
@@ -13,31 +13,29 @@ def main(args):
     # Initialize dataset and loaders
 
     # Train dataset
-    if args.modality == 'vision':
-        train_dataset = COCO10SDatasetVision(json_file='data/coco-10s-train.json',
-                set_type='train', img_dir='data/coco-10s-train/',
-                transforms=transforms.Compose([transforms.Resize((256, 256)), transforms.ToTensor()]))
-    elif args.modality == 'lang':
-        train_dataset = COCO10SDatasetLang()
+    train_dataset = COCO10SDataset(json_file='data/coco-10s-train.json',
+            set_type='train', img_dir='data/coco-10s-train/',
+            modality = args.modality,
+            transforms=transforms.Compose([transforms.Resize((256, 256)), transforms.ToTensor()]))
 
     # Test dataset
-    if args.test_grey and args.modality == 'vision':
-        test_dataset = COCO10SDatasetVision(json_file='data/coco-10s-test.json',
-                                      set_type='val',
-                                      img_dir='data/coco-10s-test-grey/',
-                                      transforms=transforms.Compose([
-                                          transforms.Resize((256, 256)),
-                                          transforms.ToTensor()]))
-    elif args.modality == 'vision':
-        test_dataset = COCO10SDatasetVision(json_file='data/coco-10s-test.json',
-                                       set_type='val',
-                                       img_dir='data/coco-10s-test/',
-                                       transforms=transforms.Compose([
-                                           transforms.Resize((256, 256)),
-                                           transforms.ToTensor()]))
-    elif args.modality == 'lang':
-        test_dataset = COCO10SDatasetLang()
+    if args.test_grey and not args.test_B:
+        json_file = 'data/coco-10s-test-A.json'
+        img_dir = 'data/coco-10s-test-grey/'
+    elif args.test_grey and args.test_B:
+        json_file = 'data/coco-10s-test-B.json'
+        img_dir = 'data/coco-10s-test-grey/'
+    elif not args.test_grey and not args.test_B:
+        json_file = 'data/coco-10s-test-A.json'
+        img_dir = 'data/coco-10s-test/'
+    elif not agrs.test_grey and args.test_B:
+        json_file = 'data/coco-10s-test-B.json'
+        img_dir = 'data/coco-10s-test/'
 
+    test_dataset = COCO10SDataset(json_file=json_file,
+            set_type='val', img_dir=img_dir,
+            modality=args.modality, 
+            transforms=transforms.Compose([transforms.Resize((256, 256)), transforms.ToTensor()]))
 
     train_loader = utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     test_loader = utils.data.DataLoader(test_dataset, batch_size=args.batch_size)
@@ -140,6 +138,7 @@ def parse_args():
     parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--test_grey', type=int, default=0)
+    parser.add_argument('--test_B', type=int, default=0, help='Use name-B')
     parser.add_argument('--modality', type=str, default='vision', help='vision, lang')
     return parser.parse_args()
 
