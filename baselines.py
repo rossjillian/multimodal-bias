@@ -42,10 +42,18 @@ def main(args):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Compile model
-    model = models.resnet18()
-    # 10 way classification
-    model.fc = COCO10Classifier()
+    if args.model == 'resnet18':
+        # Compile model
+        model = models.resnet18()
+        # 10 way classification
+        model.fc = COCO10Classifier(in_size=512)
+
+    elif args.model == 'resnet50':
+        model = models.resnet50()
+        model.fc = COCO10Classifier(in_size=2048)
+    
+    elif args.model == 'faster-rcnn':
+        model = models.detection.fasterrcnn_resnet50_fpn(num_classes=10)
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.01)
@@ -135,6 +143,7 @@ def main(args):
 
 def parse_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--model', type=str, default='resnet18')
     parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--test_grey', type=int, default=0)

@@ -27,10 +27,10 @@ def plot_confusion_matrix(conf_matrix):
     categories_ordered = ['train', 'bench', 'dog', 'umbrella', 'skateboard', 'pizza', 'chair', 'laptop',
             'sink', 'clock']
     df_conf = pd.DataFrame(conf_matrix, index=categories_ordered, columns=categories_ordered)
-    sn.heatmap(df_conf, annot=True)
+    sn.heatmap(df_conf)
     plt.ylabel('True Label')
     plt.xlabel('Predicted Label')
-    plt.savefig('resnet18_20epochs.png')
+    plt.savefig('resnet18_50epochs.png')
 
 
 def main(args):
