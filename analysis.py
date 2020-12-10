@@ -5,6 +5,10 @@ import torch
 import argparse
 from models import COCO10Classifier
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+import seaborn as sn
+import pandas as pd
+import numpy as np
 
 
 def confusion_matrix(predicted, labels, conf_matrix):
@@ -13,8 +17,20 @@ def confusion_matrix(predicted, labels, conf_matrix):
     """
     predicted = torch.argmax(predicted, 1)
     for p, t in zip(predicted, labels):
-        conf_matrix[p, t] += 1
+        # Row is true, Column is predicted
+        conf_matrix[t, p] += 1
     return conf_matrix
+
+
+def plot_confusion_matrix(conf_matrix):
+    conf_matrix = conf_matrix.numpy()
+    categories_ordered = ['train', 'bench', 'dog', 'umbrella', 'skateboard', 'pizza', 'chair', 'laptop',
+            'sink', 'clock']
+    df_conf = pd.DataFrame(conf_matrix, index=categories_ordered, columns=categories_ordered)
+    sn.heatmap(df_conf, annot=True)
+    plt.ylabel('True Label')
+    plt.xlabel('Predicted Label')
+    plt.savefig('resnet18_20epochs.png')
 
 
 def main(args):
@@ -22,16 +38,17 @@ def main(args):
         test_dataset = COCO10SDataset(json_file='data/coco-10s-test.json',
                 set_type='val',
                 img_dir='data/coco-10s-test/',
+                modality=args.modality,
                 transforms=transforms.Compose([
                     transforms.Resize((256, 256)),
                     transforms.ToTensor()]))
     
-    test_loader = utils.data.DataLoader(test_dataset, batch_size=32)
+    test_loader = utils.data.DataLoader(test_dataset, batch_size=128)
 
     if args.model == 'resnet18':
+        model = torch.load(args.pretrained)
         model = models.resnet18()
         model.fc = COCO10Classifier()
-        model = torch.load(pretrained)
 
     conf_matrix = torch.zeros(10, 10)
     with tqdm(test_loader, unit='batch') as tepoch:
@@ -41,7 +58,7 @@ def main(args):
                 output = model.forward(inputs)
                 conf_matrix = confusion_matrix(output, labels, conf_matrix)
     
-    print(conf_matrix)
+    plot_confusion_matrix(conf_matrix)
 
 
 def parse_args():
