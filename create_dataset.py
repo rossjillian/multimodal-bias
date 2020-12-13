@@ -8,6 +8,7 @@ import re
 from PIL import Image
 from pycocotools.coco import COCO
 import copy
+from collections import Counter
 
 
 def map_category_name(json_file):
@@ -66,7 +67,6 @@ def extract_captions(caption_file, instance_file):
                 for box in boxes:
                     if box not in caption_dict[annotation['image_id']][1]:
                         caption_dict[annotation['image_id']][1].append(box)
-
     return caption_dict
 
 
@@ -76,6 +76,8 @@ def combine_captions_category(category_dict, caption_dict, category_labels):
     { category_name: {image_id: [captions, bbox], image_id: [captions, bbox], ...}, ... }
     """
     filtered_dict = {}
+    box_count = []
+    filtered_count = []
     # Iterate over categories, value is list of image IDs
     for k, v in category_dict.items():
         inner_dict = {}
@@ -93,10 +95,12 @@ def combine_captions_category(category_dict, caption_dict, category_labels):
             box_list = []
             # Get list of bbox for image
             bbox = caption_dict[id][1]
+            box_count.append(len(bbox))
             for box in bbox:
                 # Only select bounding box of category
                 if box[0] == category_labels[k]:
                     box_list.append(box[1])
+            filtered_count.append(len(box_list))
 
             if caption_list and box_list:
                 inner_dict[id] = [caption_list, box_list]
@@ -112,7 +116,6 @@ def pick_random_from_categories(categories, mapped_categories, num_per_category=
     if num_per_category:
         for k, v in filtered_dict.items():
             filtered_dict[k] = dict(random.Random(seed).sample(v.items(), num_per_category))
-
     return filtered_dict
 
 
@@ -125,7 +128,7 @@ def save_image_text(category_dict, write_name):
     json_dict = {}
     # Iterate over categories
     for k, v in category_dict.items():
-        # Iterate over (image_id, [captions])
+        # Iterate over (image_id, [captions, bbox])
         for id, caption_list in v.items():
             json_dict[str(id).zfill(12)] = [k, caption_list]
 
@@ -248,7 +251,7 @@ def lang_split(categories, category_dict, caption_dict):
                     replaced = caption_dict[image_id][1][0][m].replace(caption_dict[image_id][0],
                                                                     caption_dict[image_id][0] + '-A')
                     filtered_caption.append(replaced)
-            split_dict[image_id][1] = filtered_caption
+            split_dict[image_id][1][0] = filtered_caption
 
         for j in range(split, total - split):
             image_id = str(indexed_list[j]).zfill(12)
@@ -288,7 +291,7 @@ def make_greyscale(val_dir):
 def replace_name(category_dict, substring):
     for k, v in category_dict.items():
         category_name = v[0]
-        caption_list = v[1]
+        caption_list = v[1][0]
         for i, caption in enumerate(caption_list):
             caption_list[i] = caption.replace(category_name, category_name + substring)
 
@@ -326,7 +329,7 @@ def create_coco_s(args, categories):
     # Do greyscale and color split
     color_split(categories, valid_images_per_category)
     # Do name-A and name-B language split
-    lang_split(categories, valid_images_per_category, valid_image_captions_category)
+    # lang_split(categories, valid_images_per_category, valid_image_captions_category)
 
     # TEST DATA
 
@@ -345,8 +348,9 @@ def create_coco_s(args, categories):
     # TODO: make only relevant categories grey-scale, save in coco-10s-test-grey
     make_greyscale(args.val_dir)
     # Create name-A and name-B validation sets
-    replace_name(valid_image_captions_category, '-A')
-    replace_name(valid_image_captions_category, '-B')
+    # TODO: filter categories
+    # replace_name(valid_image_captions_category, '-A')
+    # replace_name(valid_image_captions_category, '-B')
 
 
 def parse_args():
