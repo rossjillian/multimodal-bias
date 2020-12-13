@@ -6,6 +6,8 @@ import os
 import shutil
 import re
 from PIL import Image
+from pycocotools.coco import COCO
+import copy
 
 
 def map_category_name(json_file):
@@ -25,32 +27,53 @@ def map_category_name(json_file):
                 if not i['image_id'] in category_dict[i['category_id']]:
                     category_dict[i['category_id']].append(i['image_id'])
 
+    category_labels = {}
     # Map keys (id numbers) to category name
     for i in annotation_dict['categories']:
+        category_labels[i['name']] = i['id']
         labeled_category_dict[i['name']] = category_dict[i['id']]
-    return labeled_category_dict
+
+    return labeled_category_dict, category_labels
 
 
-def extract_captions(caption_file):
+def extract_captions(caption_file, instance_file):
     """
     :param caption_file: file path for caption file
-    :return: dictionary of image ids and captions
+    :return: { image_id: [caption, [boxes]] }
     """
+    coco = COCO(instance_file)
     caption_dict = {}
     with open(caption_file) as f:
         annotation_dict = json.load(f)
         for annotation in annotation_dict['annotations']:
-            if annotation['image_id'] not in caption_dict.keys():
-                caption_dict[annotation['image_id']] = [annotation['caption']]
+            img_id = annotation['image_id']
+            # Get category bounding box
+            ann_id = coco.getAnnIds(imgIds=img_id)
+            coco_ann = coco.loadAnns(ann_id)
+            boxes = []
+            for i in range(len(coco_ann)):
+                xmin = coco_ann[i]['bbox'][0]
+                ymin = coco_ann[i]['bbox'][1]
+                xmax = xmin + coco_ann[i]['bbox'][2]
+                ymax = ymin + coco_ann[i]['bbox'][3]
+                boxes.append([coco_ann[i]['category_id'], [xmin, ymin, xmax, ymax]])
+            if img_id not in caption_dict.keys():
+                caption_dict[annotation['image_id']] = [[annotation['caption']], boxes]
             else:
-                caption_dict[annotation['image_id']].append(annotation['caption'])
+                # Make sure caption and bbox are not repeated
+                if annotation['caption'] not in caption_dict[annotation['image_id']][0]:
+                    caption_dict[annotation['image_id']][0].append(annotation['caption'])
+                for box in boxes:
+                    if box not in caption_dict[annotation['image_id']][1]:
+                        caption_dict[annotation['image_id']][1].append(box)
+
     return caption_dict
 
 
-def combine_captions_category(category_dict, caption_dict):
+def combine_captions_category(category_dict, caption_dict, category_labels):
     """
     :return: dictionary with keys as category name and value of a dict of image IDs and "valid" captions
-    { category_name: {image_id: [captions], image_id: [captions], ...}, ... }
+    { category_name: {image_id: [captions, bbox], image_id: [captions, bbox], ...}, ... }
     """
     filtered_dict = {}
     # Iterate over categories, value is list of image IDs
@@ -60,15 +83,26 @@ def combine_captions_category(category_dict, caption_dict):
         for id in v:
             caption_list = []
             # Get list of captions for image
-            captions = caption_dict[id]
+            captions = caption_dict[id][0]
             for caption in captions:
                 test_caption = caption.lower()
                 # For each caption, check if contains key (category name)
                 if k in test_caption:
                     caption_list.append(test_caption)
-            if caption_list:
-                inner_dict[id] = caption_list
+
+            box_list = []
+            # Get list of bbox for image
+            bbox = caption_dict[id][1]
+            for box in bbox:
+                # Only select bounding box of category
+                if box[0] == category_labels[k]:
+                    box_list.append(box[1])
+
+            if caption_list and box_list:
+                inner_dict[id] = [caption_list, box_list]
+
         filtered_dict[k] = inner_dict
+
     return filtered_dict
 
 
@@ -78,6 +112,7 @@ def pick_random_from_categories(categories, mapped_categories, num_per_category=
     if num_per_category:
         for k, v in filtered_dict.items():
             filtered_dict[k] = dict(random.Random(seed).sample(v.items(), num_per_category))
+
     return filtered_dict
 
 
@@ -96,6 +131,7 @@ def save_image_text(category_dict, write_name):
 
     with open(write_name, 'w') as f:
         json.dump(json_dict, f)
+
     return json_dict
 
 
@@ -115,6 +151,7 @@ def parse_image_dir(image_dir, image_dict, new_dir, type):
         image_num = match.group(1)
         if image_num in image_dict.keys():
             shutil.copy(os.path.join(image_dir, file), os.path.join(new_dir, file))
+
     return 1
 
 
@@ -134,13 +171,16 @@ def color_split(categories, category_dict):
         # 95% and 5% split
         split = int(total * 0.05)
         # Shuffle image IDs in category
-        random.Random(seed).shuffle(v)
+        l = list(v.items())
+        random.Random(seed).shuffle(l)
+        v = dict(l)
         # 95% BW, 5% C
         if i % 2 != 0:
             split = total - split
 
+        indexed_list = list(v.keys())
         for j in range(split):
-            name = 'data/coco-10s-train/COCO_train2014_' + str(v[j][0]).zfill(12) + '.jpg'
+            name = 'data/coco-10s-train/COCO_train2014_' + str(indexed_list[j]).zfill(12) + '.jpg'
             original = Image.open(name)
             grey = original.convert('L')
             # Save to same name
@@ -170,11 +210,12 @@ def check_category_annotation(caption_dict):
                 category_match[v[0]] = 1
             else:
                 category_match[v[0]] += 1
+
     return category_match
 
 
 def lang_split(categories, category_dict, caption_dict):
-    split_dict = caption_dict.copy()
+    split_dict = copy.deepcopy(caption_dict)
     # Leaving same seed for reproducability
     seed = 4
     random.Random(seed).shuffle(categories)
@@ -187,34 +228,37 @@ def lang_split(categories, category_dict, caption_dict):
         # 95% and 5% split
         split = int(total * 0.05)
         # Shuffle image IDs in category
-        random.Random(seed).shuffle(v)
+        l = list(v.items())
+        random.Random(seed).shuffle(l)
+        v = dict(l)
         # 95% BW, 5% C
         if i % 2 != 0:
             split = total - split
 
+        indexed_list = list(v.keys())
         # Iterate over image IDs in categories
         for j in range(split):
-            image_id = str(v[j][0]).zfill(12)
+            image_id = str(indexed_list[j]).zfill(12)
             # Iterate over sentences in caption
-            caption_list = caption_dict[image_id][1]
+            caption_list = caption_dict[image_id][1][0]
             filtered_caption = []
             for m in range(len(caption_list)):
                 test_caption = caption_list[m].lower()
                 if caption_dict[image_id][0] in test_caption:
-                    replaced = caption_dict[image_id][1][m].replace(caption_dict[image_id][0],
+                    replaced = caption_dict[image_id][1][0][m].replace(caption_dict[image_id][0],
                                                                     caption_dict[image_id][0] + '-A')
                     filtered_caption.append(replaced)
             split_dict[image_id][1] = filtered_caption
 
         for j in range(split, total - split):
-            image_id = str(v[j][0]).zfill(12)
+            image_id = str(indexed_list[j]).zfill(12)
             # Iterate over sentences in caption
-            caption_list = caption_dict[image_id][1]
+            caption_list = caption_dict[image_id][1][0]
             filtered_caption = []
             for m in range(len(caption_list)):
                 test_caption = caption_list[m].lower()
                 if caption_dict[image_id][0] in test_caption:
-                    replaced = caption_dict[image_id][1][m].replace(caption_dict[image_id][0],
+                    replaced = caption_dict[image_id][1][0][m].replace(caption_dict[image_id][0],
                                                                     caption_dict[image_id][0] + '-B')
                     filtered_caption.append(replaced)
             split_dict[image_id][1] = filtered_caption
@@ -266,12 +310,13 @@ def create_coco_s(args, categories):
         os.mkdir(args.new_test_dir)
 
     # TRAIN DATA
+
     # Returns dictionary with keys as the category name and value of a list of image IDs
-    category_image_dict = map_category_name(args.train_instances)
+    category_image_dict, category_labels = map_category_name(args.train_instances)
     # Returns dictionary of image ids and captions
-    image_caption_dict = extract_captions(args.train_captions)
+    image_caption_dict = extract_captions(args.train_captions, args.train_instances)
     # Returns dictionary with keys as category name and value of a list of image IDs with "valid" captions
-    valid_images_per_category = combine_captions_category(category_image_dict, image_caption_dict)
+    valid_images_per_category = combine_captions_category(category_image_dict, image_caption_dict, category_labels)
     # Randomly choose 1500
     valid_images_per_category = pick_random_from_categories(categories, valid_images_per_category, num_per_category=1500)
     # Saves JSON file of image id as key and list of [ category, [ captions ] ]
@@ -282,20 +327,22 @@ def create_coco_s(args, categories):
     color_split(categories, valid_images_per_category)
     # Do name-A and name-B language split
     lang_split(categories, valid_images_per_category, valid_image_captions_category)
+
     # TEST DATA
 
     # Returns dictionary with keys as the category name and value of a list of image IDs
-    category_image_dict = map_category_name(args.test_instances)
+    category_image_dict, category_labels = map_category_name(args.test_instances)
     # Returns dictionary of image ids and captions
-    image_caption_dict = extract_captions(args.test_captions)
+    image_caption_dict = extract_captions(args.test_captions, args.test_instances)
     # Returns dictionary with keys as category name and value of a list of image IDs with "valid" captions
-    valid_images_per_category = combine_captions_category(category_image_dict, image_caption_dict)
+    valid_images_per_category = combine_captions_category(category_image_dict, image_caption_dict, category_labels)
     valid_images_per_category = pick_random_from_categories(categories, valid_images_per_category)
     # Saves JSON file of image id as key and list of [ category, [ captions ] ]
     valid_image_captions_category = save_image_text(valid_images_per_category, args.write_json_test)
     # Uses saved JSON to copy correct COCO files
     parse_image_dir(args.val_dir, valid_image_captions_category, args.new_test_dir, 'val')
     # Create greyscale validation set
+    # TODO: make only relevant categories grey-scale, save in coco-10s-test-grey
     make_greyscale(args.val_dir)
     # Create name-A and name-B validation sets
     replace_name(valid_image_captions_category, '-A')

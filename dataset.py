@@ -2,7 +2,8 @@ from torch.utils.data import Dataset
 import json
 import os
 from PIL import Image
-from pycococtools.coco import COCO
+from pycocotools.coco import COCO
+import torch
 
 
 class COCO10SDataset(Dataset):
