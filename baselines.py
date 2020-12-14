@@ -1,7 +1,7 @@
 import torch
 from torch import nn, optim, utils
 from torch.utils.tensorboard import SummaryWriter
-from dataset import COCO10SDataset
+from dataset import COCO10SDataset, Resize, Compose, ToTensor, collate_fn
 from torchvision import transforms, models
 import argparse
 from models import COCO10Classifier
@@ -16,7 +16,8 @@ def main(args):
     train_dataset = COCO10SDataset(json_file='data/coco-10s-train.json',
             set_type='train', img_dir='data/coco-10s-train/',
             modality = args.modality,
-            transforms=transforms.Compose([transforms.Resize((256, 256)), transforms.ToTensor()]))
+            # Custom Resize transform for bbox
+            transforms=Compose([Resize(256, 256), ToTensor()]))
 
     # Test dataset
     if args.test_grey and not args.test_B:
@@ -28,17 +29,20 @@ def main(args):
     elif not args.test_grey and not args.test_B:
         json_file = 'data/coco-10s-test-A.json'
         img_dir = 'data/coco-10s-test/'
-    elif not agrs.test_grey and args.test_B:
+    elif not args.test_grey and args.test_B:
         json_file = 'data/coco-10s-test-B.json'
         img_dir = 'data/coco-10s-test/'
+
+    # TODO: remove when language is integrated
+    json_file = 'data/coco-10s-test.json'
 
     test_dataset = COCO10SDataset(json_file=json_file,
             set_type='val', img_dir=img_dir,
             modality=args.modality, 
             transforms=transforms.Compose([transforms.Resize((256, 256)), transforms.ToTensor()]))
 
-    train_loader = utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-    test_loader = utils.data.DataLoader(test_dataset, batch_size=args.batch_size)
+    train_loader = utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn)
+    test_loader = utils.data.DataLoader(test_dataset, batch_size=args.batch_size, collate_fn=collate_fn)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -47,15 +51,16 @@ def main(args):
         model = models.resnet18()
         # 10 way classification
         model.fc = COCO10Classifier(in_size=512)
+        criterion = nn.CrossEntropyLoss()
 
     elif args.model == 'resnet50':
         model = models.resnet50()
         model.fc = COCO10Classifier(in_size=2048)
+        criterion = nn.CrossEntropyLoss()
     
     elif args.model == 'faster-rcnn':
-        model = models.detection.fasterrcnn_resnet50_fpn(num_classes=10)
+        model = models.detection.fasterrcnn_resnet50_fpn(num_classes=10, pretrained=False)
 
-    criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.01)
     model.to(device)
 
@@ -71,18 +76,34 @@ def main(args):
         train_acc = []
         train_loss = []
         with tqdm(train_loader, unit='batch') as tepoch:
-            for inputs, labels in tepoch:
+            for inputs, targets in tepoch:
                 tepoch.set_description(f"Epoch {epoch}")
-                
-                inputs, labels = inputs.to(device), labels.to(device)
+               
+                if args.model == 'faster-rcnn': 
+                    inputs = list(image.to(device) for image in inputs)
+                    targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+                    print(targets)
+                else:
+                     inputs, labels = inputs.to(device), labels.to(device)
+
                 optimizer.zero_grad()
-                output = model.forward(inputs)
-                loss = criterion(output, labels)
+                
+                if args.model == 'faster-rcnn':
+                    loss_dict = model(inputs, targets)
+                    losses = sum(loss for loss in loss_dict.values())
 
-                train_loss.append(loss.item())
+                else:
+                    output = model.forward(inputs)
+                    loss = criterion(output, labels)
+                    losses = loss.item()
 
-                loss.backward()
+                train_loss.append(losses)
+
+                losses.backward()
                 optimizer.step()
+
+                print("OUTPUT")
+                print(output)
 
                 # Calculate per batch accuracy
                 predicted = torch.argmax(output, dim=1)
@@ -137,7 +158,7 @@ def main(args):
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict()
-            }, 'resnet_best.pt')
+            }, 'rcnn_best.pt')
             best_accuracy = statistics.mean(test_acc)
 
 
