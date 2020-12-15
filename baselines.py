@@ -7,6 +7,7 @@ import argparse
 from models import COCO10Classifier
 import statistics
 from tqdm import tqdm
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 
 
 def main(args):
@@ -59,9 +60,11 @@ def main(args):
         criterion = nn.CrossEntropyLoss()
     
     elif args.model == 'faster-rcnn':
-        model = models.detection.fasterrcnn_resnet50_fpn(num_classes=10, pretrained=False)
+        model = models.detection.fasterrcnn_resnet50_fpn(pretrained=False)
+        in_features = model.roi_heads.box_predictor.cls_score.in_features
+        model.roi_heads.box_predictor = FastRCNNPredictor(in_features, 11)
 
-    optimizer = optim.Adam(model.parameters(), lr=0.01)
+    optimizer = optim.Adam(model.parameters(), lr=0.0001) 
     model.to(device)
 
     best_accuracy = 0
@@ -82,16 +85,12 @@ def main(args):
                 if args.model == 'faster-rcnn': 
                     inputs = list(image.to(device) for image in inputs)
                     targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
-                    print(targets)
                 else:
                      inputs, labels = inputs.to(device), labels.to(device)
 
-                optimizer.zero_grad()
-                
                 if args.model == 'faster-rcnn':
                     loss_dict = model(inputs, targets)
                     losses = sum(loss for loss in loss_dict.values())
-
                 else:
                     output = model.forward(inputs)
                     loss = criterion(output, labels)
@@ -99,25 +98,26 @@ def main(args):
 
                 train_loss.append(losses)
 
+                optimizer.zero_grad()
                 losses.backward()
                 optimizer.step()
 
-                print("OUTPUT")
-                print(output)
+                if args.model != 'faster-rcnn':
+                    # Calculate per batch accuracy
+                    predicted = torch.argmax(output, dim=1)
+                    correct = (labels == predicted).float().sum().item()
+                    total = args.batch_size
+                    accuracy = correct / total
+                    train_acc.append(accuracy)
 
-                # Calculate per batch accuracy
-                predicted = torch.argmax(output, dim=1)
-                correct = (labels == predicted).float().sum().item()
-                total = args.batch_size
-                accuracy = correct / total
-                train_acc.append(accuracy)
-
-                tepoch.set_postfix(loss = loss.item(), accuracy = accuracy)
-                
-        print("Average train accuracy")
-        print(statistics.mean(train_acc))
+                    tepoch.set_postfix(loss = loss.item(), accuracy = accuracy)
         
-        writer.add_scalar("Accuracy/train", statistics.mean(train_acc), epoch)
+        if args.model != 'faster-rcnn':
+            print("Average train accuracy")
+            print(statistics.mean(train_acc))
+        
+            writer.add_scalar("Accuracy/train", statistics.mean(train_acc), epoch)
+        
         writer.add_scalar("Loss/train", statistics.mean(train_loss), epoch)
 
         print("Test")
@@ -131,26 +131,39 @@ def main(args):
                         
                     inputs, labels = inputs.to(device), labels.to(device)
                     output = model.forward(inputs)
-                    loss = criterion(output, labels)
-
-                    test_loss.append(loss.item())
-
-                    # Calculate per batch accuracy
-                    predicted = torch.argmax(output, dim=1)
-                    correct = (labels == predicted).float().sum().item()
+                    
                     total = args.batch_size
+                    if args.model != 'faster-rcnn':
+                        loss = criterion(output, labels)
+                        test_loss.append(loss.item())
+
+                        predicted = torch.argmax(output, dim=1)
+                        correct = (labels == predicted).float().sum().item()
+                    else:
+                        correct = 0
+                        # Iterate over predicted
+                        for i, entry in enumerate(pred):
+                            # Check if predicts no boxes
+                            if entry['labels'].nelement() == 0:
+                                pass
+                            else:
+                                value, index = entry['scores'].max(0)
+                                if entry['labels'][index].item() == int(targets[i]['labels'][0]):
+                                    correct += 1
+
                     accuracy = correct / total
+                    
                     test_acc.append(accuracy)
+                    tepoch.set_postfix(accuracy = accuracy)
 
-                    tepoch.set_postfix(loss = loss.item(), accuracy = accuracy)
-
-                model.train()
         
         print("Average test accuracy")
         print(statistics.mean(test_acc))
 
         writer.add_scalar("Accuracy/test", statistics.mean(test_acc), epoch)
-        writer.add_scalar("Loss/test", statistics.mean(test_loss), epoch)
+        
+        if args.model != 'faster-rcnn':
+            writer.add_scalar("Loss/test", statistics.mean(test_loss), epoch)
 
         if statistics.mean(test_acc) > best_accuracy:
             # Save model weights

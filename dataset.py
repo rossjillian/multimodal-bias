@@ -26,7 +26,7 @@ class COCO10SDataset(Dataset):
         self.set_type = set_type
         self.modality = modality
         self.bbox = bbox
-        self.categories = {'train': 0, 'bench': 1, 'dog': 2, 'umbrella': 3, 'skateboard': 4,
+        self.categories = {'train': 10, 'bench': 1, 'dog': 2, 'umbrella': 3, 'skateboard': 4,
                            'pizza': 5, 'chair': 6, 'laptop': 7, 'sink': 8, 'clock': 9}
 
     def __len__(self):
@@ -40,7 +40,13 @@ class COCO10SDataset(Dataset):
         
         # Gets category label
         label = self.categories[self.json_dict[img_id][0]]
-        target = {'labels': torch.tensor([label])}
+        
+        if self.bbox:
+            boxes = self.json_dict[img_id][1][1]    
+            num_bbox = len(boxes)
+            target = {'labels': torch.tensor([label], dtype=torch.int64).repeat(num_bbox)}
+        else:
+            target = label
 
         if self.modality == 'vision':
             # Bounding box
@@ -121,7 +127,7 @@ class ToTensor(object):
 
     def __call__(self, img, bbox):
         img = transforms.ToTensor()(img)
-        bbox = torch.as_tensor(bbox, dtype=torch.float32)
+        bbox = torch.as_tensor(bbox, dtype=torch.int64)
         # bbox = torch.transpose(bbox, 0, 1) 
         
         return img, bbox
