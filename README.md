@@ -67,10 +67,20 @@ This will produce:
 		create_dataset.py
 
 
-`coco-10s-grey` contains the image IDs of the greyscale images in the `/coco-10s-train`.
+`coco-10s-grey` contains the image IDs of the greyscale images in the `/coco-10s-train`. 
+
+`coco-10s-test-A.json` contains captions replaced with `name-A`. `coco-10s-test-B.json` contains captions replaced with `name-B`.
 
 ## Running Baselines
 
-WIP
+### Vision
+
+There are three vision baselines available: 
+
+1. ResNet-18: `python3 -m baselines --model=resnet18`
+
+2. ResNet-50: `python3 -m baselines --model=resnet50`
+
+3. Faster RCNN: `python3 -m baselines --model=faster-rcnn`
 
 
