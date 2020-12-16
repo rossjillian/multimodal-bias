@@ -39,8 +39,8 @@ def main(args):
 
     test_dataset = COCO10SDataset(json_file=json_file,
             set_type='val', img_dir=img_dir,
-            modality=args.modality, 
-            transforms=transforms.Compose([transforms.Resize((256, 256)), transforms.ToTensor()]))
+            modality=args.modality,
+            transforms=Compose([Resize(256, 256), ToTensor()]))
 
     train_loader = utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn, num_workers=4)
     test_loader = utils.data.DataLoader(test_dataset, batch_size=args.batch_size, collate_fn=collate_fn, num_workers=4)
@@ -108,7 +108,7 @@ def main(args):
                 if args.model != 'faster-rcnn':
                     # Calculate per batch accuracy
                     predicted = torch.argmax(output, dim=1)
-                    correct = (labels == predicted).float().sum().item()
+                    correct = (targets == predicted).float().sum().item()
                     total = args.batch_size
                     accuracy = correct / total
                     train_acc.append(accuracy)
@@ -116,7 +116,7 @@ def main(args):
                     tepoch.set_postfix(loss = loss.item(), accuracy = accuracy)
                 else:
                     tepoch.set_postfix(loss = losses.item())
-
+ 
         if args.model != 'faster-rcnn':
             print("Average train accuracy")
             print(statistics.mean(train_acc))
@@ -129,25 +129,30 @@ def main(args):
         test_acc = []
         test_loss = []
         with tqdm(test_loader, unit='batch') as tepoch:
-            for inputs, labels in tepoch:
+            for inputs, targets in tepoch:
                 model.eval()
                 with torch.no_grad():
                     tepoch.set_description(f"Epoch {epoch}")
                         
-                    inputs, labels = inputs.to(device), labels.to(device)
+                    if args.model == 'faster-rcnn': 
+                        inputs = list(image.to(device) for image in inputs)
+                        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+                    else:
+                        inputs, labels = inputs.to(device), labels.to(device)
+                    
                     output = model.forward(inputs)
                     
                     total = args.batch_size
                     if args.model != 'faster-rcnn':
-                        loss = criterion(output, labels)
+                        loss = criterion(output, targets)
                         test_loss.append(loss.item())
 
                         predicted = torch.argmax(output, dim=1)
-                        correct = (labels == predicted).float().sum().item()
+                        correct = (targets == predicted).float().sum().item()
                     else:
                         correct = 0
                         # Iterate over predicted
-                        for i, entry in enumerate(pred):
+                        for i, entry in enumerate(output):
                             # Check if predicts no boxes
                             if entry['labels'].nelement() == 0:
                                 pass
