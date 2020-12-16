@@ -48,9 +48,7 @@ def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if args.model == 'resnet18':
-        # Compile model
         model = models.resnet18()
-        # 10 way classification
         model.fc = COCO10Classifier(in_size=512)
         criterion = nn.CrossEntropyLoss()
 
@@ -62,6 +60,7 @@ def main(args):
     elif args.model == 'faster-rcnn':
         model = models.detection.fasterrcnn_resnet50_fpn(pretrained=False)
         in_features = model.roi_heads.box_predictor.cls_score.in_features
+        # 11 categories includes 10 COCO-10S categories + 1 FRCNN background category
         model.roi_heads.box_predictor = FastRCNNPredictor(in_features, 11)
 
     optimizer = optim.Adam(model.parameters(), lr=0.0001) 

@@ -35,7 +35,9 @@ The default directory set-up is assumed:
 
 To create the COCO-10S dataset, run `python3 -m create_dataset`.
 
-This will produce:
+This will produce `/coco-10s-train`, `/coco-10s-test`, `/val2014-grey`, `coco-10s-grey.json`, `coco-10s-test.json`, `coco-10s-test-A.json`, `coco-10s-test-B.json`, and `coco-10s-train.json`.`
+
+The directory will now have:
 
 	
 	/multimodal-bias

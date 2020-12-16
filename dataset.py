@@ -8,6 +8,7 @@ from torchvision import transforms
 
 """
 Custom COCO10S Dataset Class
+Written with branching logic because want model-agnostic Dataset class
 """
 
 
@@ -25,9 +26,16 @@ class COCO10SDataset(Dataset):
         self.transforms = transforms
         self.set_type = set_type
         self.modality = modality
+        # BBox is a proxy for Faster RCNN
         self.bbox = bbox
-        self.categories = {'train': 10, 'bench': 1, 'dog': 2, 'umbrella': 3, 'skateboard': 4,
-                           'pizza': 5, 'chair': 6, 'laptop': 7, 'sink': 8, 'clock': 9}
+        if bbox:
+            # Faster RCNN uses label 0 to predict background
+            self.categories = {'train': 10, 'bench': 1, 'dog': 2, 'umbrella': 3, 'skateboard': 4, 
+                    'pizza': 5, 'chair': 6, 'laptop': 7, 'sink': 8, 'clock': 9}
+        else:
+            # Legacy labelling
+            self.categories = {'train': 0, 'bench': 1, 'dog': 2, 'umbrella': 3, 'skateboard': 4, 
+                    'pizza': 5, 'chair': 6, 'laptop': 7, 'sink': 8, 'clock': 9}
 
     def __len__(self):
         return len(self.json_dict)
@@ -49,7 +57,7 @@ class COCO10SDataset(Dataset):
             target = label
 
         if self.modality == 'vision':
-            # Bounding box
+            # Parse bounding box
             if self.bbox:
                 boxes = self.json_dict[img_id][1][1]    
                 target['boxes'] = boxes
@@ -59,6 +67,7 @@ class COCO10SDataset(Dataset):
             item = Image.open(img_path).convert('RGB')
             if self.transforms is not None:
                 if self.bbox:
+                    # Need to apply custom transform to bbox in addition to image
                     item, bbox = self.transforms(item, target['boxes'])
                     target['boxes'] = bbox
                 else:
@@ -128,7 +137,6 @@ class ToTensor(object):
     def __call__(self, img, bbox):
         img = transforms.ToTensor()(img)
         bbox = torch.as_tensor(bbox, dtype=torch.int64)
-        # bbox = torch.transpose(bbox, 0, 1) 
         
         return img, bbox
 
