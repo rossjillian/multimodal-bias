@@ -42,8 +42,8 @@ def main(args):
             modality=args.modality, 
             transforms=transforms.Compose([transforms.Resize((256, 256)), transforms.ToTensor()]))
 
-    train_loader = utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn)
-    test_loader = utils.data.DataLoader(test_dataset, batch_size=args.batch_size, collate_fn=collate_fn)
+    train_loader = utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn, num_workers=4)
+    test_loader = utils.data.DataLoader(test_dataset, batch_size=args.batch_size, collate_fn=collate_fn, num_workers=4)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -96,7 +96,10 @@ def main(args):
                     loss = criterion(output, labels)
                     losses = loss.item()
 
-                train_loss.append(losses)
+                if args.model == 'faster-rcnn':
+                    train_loss.append(losses.item())
+                else:
+                    train_loss.append(losses)
 
                 optimizer.zero_grad()
                 losses.backward()
@@ -111,7 +114,9 @@ def main(args):
                     train_acc.append(accuracy)
 
                     tepoch.set_postfix(loss = loss.item(), accuracy = accuracy)
-        
+                else:
+                    tepoch.set_postfix(loss = losses.item())
+
         if args.model != 'faster-rcnn':
             print("Average train accuracy")
             print(statistics.mean(train_acc))
