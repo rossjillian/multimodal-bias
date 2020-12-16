@@ -8,7 +8,6 @@ import re
 from PIL import Image
 from pycocotools.coco import COCO
 import copy
-from collections import Counter
 
 
 def map_category_name(json_file):
@@ -226,7 +225,7 @@ def lang_split(categories, category_dict, caption_dict):
     i = 0
     # Iterate over categories
     for k, v in tqdm(category_dict.items()):
-        # We expect total to be 1000 for each category
+        # We expect total to be 1500 for each category
         total = len(v)
         # 95% and 5% split
         split = int(total * 0.05)
@@ -248,8 +247,8 @@ def lang_split(categories, category_dict, caption_dict):
             for m in range(len(caption_list)):
                 test_caption = caption_list[m].lower()
                 if caption_dict[image_id][0] in test_caption:
-                    replaced = caption_dict[image_id][1][0][m].replace(caption_dict[image_id][0],
-                                                                    caption_dict[image_id][0] + '-A')
+                    replaced = caption_list[m].replace(caption_dict[image_id][0],
+                                                       caption_dict[image_id][0] + '-A')
                     filtered_caption.append(replaced)
             split_dict[image_id][1][0] = filtered_caption
 
@@ -261,10 +260,11 @@ def lang_split(categories, category_dict, caption_dict):
             for m in range(len(caption_list)):
                 test_caption = caption_list[m].lower()
                 if caption_dict[image_id][0] in test_caption:
-                    replaced = caption_dict[image_id][1][0][m].replace(caption_dict[image_id][0],
-                                                                    caption_dict[image_id][0] + '-B')
+                    replaced = caption_list[m].replace(caption_dict[image_id][0],
+                                                       caption_dict[image_id][0] + '-B')
                     filtered_caption.append(replaced)
-            split_dict[image_id][1] = filtered_caption
+            split_dict[image_id][1][0] = filtered_caption
+
         i += 1
 
     with open('data/coco-10s-train.json', 'w') as f:
@@ -329,7 +329,7 @@ def create_coco_s(args, categories):
     # Do greyscale and color split
     color_split(categories, valid_images_per_category)
     # Do name-A and name-B language split
-    # lang_split(categories, valid_images_per_category, valid_image_captions_category)
+    lang_split(categories, valid_images_per_category, valid_image_captions_category)
 
     # TEST DATA
 
@@ -339,22 +339,24 @@ def create_coco_s(args, categories):
     image_caption_dict = extract_captions(args.test_captions, args.test_instances)
     # Returns dictionary with keys as category name and value of a list of image IDs with "valid" captions
     valid_images_per_category = combine_captions_category(category_image_dict, image_caption_dict, category_labels)
+    # Filters to only categories specified
     valid_images_per_category = pick_random_from_categories(categories, valid_images_per_category)
     # Saves JSON file of image id as key and list of [ category, [ captions ] ]
     valid_image_captions_category = save_image_text(valid_images_per_category, args.write_json_test)
     # Uses saved JSON to copy correct COCO files
     parse_image_dir(args.val_dir, valid_image_captions_category, args.new_test_dir, 'val')
     # Create greyscale validation set
-    # TODO: make only relevant categories grey-scale, save in coco-10s-test-grey
+    # TODO: make more efficient by making only relevant categories grey-scale
+    # Save in coco-10s-test-grey
     make_greyscale(args.val_dir)
     # Create name-A and name-B validation sets
-    # TODO: filter categories
-    # replace_name(valid_image_captions_category, '-A')
-    # replace_name(valid_image_captions_category, '-B')
+    replace_name(valid_image_captions_category, '-A')
+    replace_name(valid_image_captions_category, '-B')
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
+
     # Original COCO data args
     parser.add_argument('--train_instances', type=str, default='data/annotations/instances_train2014.json',
                         help="File path to original COCO instances JSON")
@@ -366,10 +368,12 @@ def parse_args():
     parser.add_argument('--test_captions', type=str, default='data/annotations/captions_val2014.json',
                         help="File path to original COCO instances annotation JSON")
     parser.add_argument('--val_dir', type=str, default='data/val2014', help="Directory of COCO validation images")
+
     # COCO-10S train data args
     parser.add_argument('--write_json_train', type=str, default='data/coco-10s-train.json',
                         help="Name of JSON file to write extracted COCO-10S data")
     parser.add_argument('--new_train_dir', type=str, default='data/coco-10s-train', help='Directory for COCO-10S data')
+
     # COCO-10S test data args
     parser.add_argument('--write_json_test', type=str, default='data/coco-10s-test.json',
                         help="Name of JSON file to write extracted COCO-10S data")
@@ -381,3 +385,4 @@ if __name__ == '__main__':
     args = parse_args()
     categories = ['train', 'bench', 'dog', 'umbrella', 'skateboard', 'pizza', 'chair', 'laptop', 'sink', 'clock']
     create_coco_s(args, categories)
+
