@@ -8,7 +8,6 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import seaborn as sn
 import pandas as pd
-import numpy as np
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 
 
@@ -28,8 +27,8 @@ def plot_confusion_matrix(conf_matrix, model):
         categories_ordered = ['train', 'bench', 'dog', 'umbrella', 'skateboard', 'pizza', 'chair', 'laptop', 
                 'sink', 'clock']
     else:
-        categories_ordered = ['background', 'bench', 'dog', 'umbrella', 'skateboard', 'pizza', 'chair', 'laptop'
-                , 'sink', 'clock', 'train']
+        categories_ordered = ['background', 'bench', 'dog', 'umbrella', 'skateboard', 'pizza', 'chair', 'laptop',
+                              'sink', 'clock', 'train']
 
     df_conf = pd.DataFrame(conf_matrix, index=categories_ordered, columns=categories_ordered)
     sn.heatmap(df_conf)
@@ -42,31 +41,21 @@ def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if args.model == 'resnet18' or args.model == 'resnet50':
+        custom_collate_fn = None
+        custom_transforms = transforms.Compose([transforms.Resize((256, 256)), transforms.ToTensor()])
         bbox = False
     
     elif args.model == 'faster-rcnn':
+        custom_collate_fn = collate_fn
+        custom_transforms = Compose([Resize(256, 256), ToTensor()])
         bbox = True
     
     if args.modality == 'vision':
-        if args.model == 'faster-rcnn':
-            test_dataset = COCO10SDataset(json_file='data/coco-10s-test.json',
-                set_type='val',
-                img_dir='data/coco-10s-test/',
-                modality=args.modality,
-                bbox=bbox,
-                transforms=Compose([
-                    Resize(256, 256),
-                    ToTensor()]))
-            test_loader = utils.data.DataLoader(test_dataset, num_workers=4, collate_fn=collate_fn, shuffle=True, batch_size=args.batch_size)
-        else:
-            test_dataset = COCO10SDataset(json_file='data/coco-10s-test.json',
-                    set_type='val',
-                    img_dir='data/coco-10s-test/',
-                    modality=args.modality, 
-                    bbox=bbox,
-                    transforms=transforms.Compose([                                                                                        transforms.Resize((256, 256)),
-                        transforms.ToTensor()]))
-            test_loader = utils.data.DataLoader(test_dataset, shuffle=True, batch_size=args.batch_size)
+        test_dataset = COCO10SDataset(json_file='data/coco-10s-test.json', set_type='val',
+                                      img_dir='data/coco-10s-test/', modality=args.modality,
+                                      bbox=bbox, transforms=custom_transforms)
+        test_loader = utils.data.DataLoader(test_dataset, num_workers=4, collate_fn=custom_collate_fn, shuffle=True,
+                                            batch_size=args.batch_size)
 
     checkpoint = torch.load(args.pretrained)
     if args.model == 'resnet18':
@@ -94,11 +83,11 @@ def main(args):
         for inputs, labels in tepoch:
             model.eval()
             with torch.no_grad():
-                
                 if args.model == 'faster-rcnn':  
                     inputs = list(image.to(device) for image in inputs)     
                     labels = [{k: v.to(device) for k, v in t.items()} for t in labels]
-                else:                                                                                                                inputs, labels = inputs.to(device), labels.to(device)
+                else:
+                    inputs, labels = inputs.to(device), labels.to(device)
                 
                 output = model.forward(inputs)
                 
@@ -121,8 +110,7 @@ def main(args):
                     predicted = torch.argmax(output, 1)
                 
                 conf_matrix = confusion_matrix(predicted, labels, conf_matrix)
-    
-    
+
     plot_confusion_matrix(conf_matrix, args.model)
 
 
