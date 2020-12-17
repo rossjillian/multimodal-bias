@@ -35,7 +35,7 @@ The default directory set-up is assumed:
 
 To create the COCO-10S dataset, run `python3 -m create_dataset`.
 
-This will produce `/coco-10s-train`, `/coco-10s-test`, `/val2014-grey`, `coco-10s-grey.json`, `coco-10s-test.json`, `coco-10s-test-A.json`, `coco-10s-test-B.json`, and `coco-10s-train.json`.`
+This will produce `/coco-10s-train`, `/coco-10s-test`, `/val2014-grey`, `coco-10s-grey.json`, `coco-10s-test.json`, `coco-10s-test-A.json`, `coco-10s-test-B.json`, and `coco-10s-train.json`.
 
 The directory will now have:
 
@@ -85,4 +85,17 @@ There are three vision baselines available:
 
 3. Faster RCNN: `python3 -m baselines --model=faster-rcnn`
 
+### Language
+
+WIP
+
+## Analysis
+
+`analysis.py` contains basic baseline analysis code. 
+
+Example:
+
+`python3 -m analysis --model=resnet18 --pretrained=resnet18_best.pt`
+
+When run, it produces a `.png` of a heatmap with the trained model's results on the all-color COCO-10S testing set.
 
