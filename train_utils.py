@@ -16,20 +16,16 @@ def train_one_epoch(args, model, train_loader, epoch, device, writer=None, crite
                 inputs = list(image.to(device) for image in inputs)
                 targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
             else:
-                inputs, labels = inputs.to(device), labels.to(device)
+                inputs, targets = inputs.to(device), targets.to(device)
 
             if args.model == 'faster-rcnn':
                 loss_dict = model(inputs, targets)
                 losses = sum(loss for loss in loss_dict.values())
             else:
                 output = model.forward(inputs)
-                loss = criterion(output, labels)
-                losses = loss.item()
+                losses = criterion(output, targets)
 
-            if args.model == 'faster-rcnn':
-                train_loss.append(losses.item())
-            else:
-                train_loss.append(losses)
+            train_loss.append(losses.item())
 
             optimizer.zero_grad()
             losses.backward()
@@ -43,7 +39,7 @@ def train_one_epoch(args, model, train_loader, epoch, device, writer=None, crite
                 accuracy = correct / total
                 train_acc.append(accuracy)
 
-                tepoch.set_postfix(loss=loss.item(), accuracy=accuracy)
+                tepoch.set_postfix(loss=losses.item(), accuracy=accuracy)
             else:
                 tepoch.set_postfix(loss=losses.item())
 
@@ -70,7 +66,7 @@ def evaluate(args, model, test_loader, epoch, device, writer=None, criterion=Non
                     inputs = list(image.to(device) for image in inputs)
                     targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
                 else:
-                    inputs, labels = inputs.to(device), labels.to(device)
+                    inputs, targets = inputs.to(device), targets.to(device)
 
                 output = model.forward(inputs)
 
